@@ -63,21 +63,29 @@ class TestCommons(CleverHansTest):
 
         self.assertGreater(success_rate.numpy(), .7)
 
+    def _test_for_all_norms(self, test_fn, attack_fn):
+        for norm in self.ord_list:
+            with self.subTest(norm=norm):
+                params = self.attack_param
+                params.update({"norm": norm})
+                test_fn(
+                    attack_fn, **params)
+
 
 class TestFastGradientMethod(TestCommons):
 
     def setUp(self):
         super(TestFastGradientMethod, self).setUp()
         self.attack_param = {
-            "norm": np.inf,
             'eps': .5,
             'clip_min': -5,
             'clip_max': 5,
         }
 
-    def test_adv_example_success_rate_linf(self):
-        self._attack_success_rate(fast_gradient_method, **self.attack_param)
+    def test_adv_example_success_rate(self):
+        self._test_for_all_norms(
+            self._attack_success_rate, fast_gradient_method)
 
     def test_adv_example_success_rate_targeted_linf(self):
-        self._attack_success_rate_targeted(
-            fast_gradient_method, **self.attack_param)
+        self._test_for_all_norms(
+            self._attack_success_rate_targeted, fast_gradient_method)
