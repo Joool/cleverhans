@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model
-from tensorflow.keras.layers import Dense, Flatten
+from tensorflow.keras.layers import Conv2D, Dense, Flatten
 
 from cleverhans.devtools.checks import CleverHansTest
 from cleverhans.future.tf2.attacks.fast_gradient_method import \
@@ -11,26 +11,40 @@ from cleverhans.future.tf2.attacks.fast_gradient_method import \
 class TestModel(Model):
     def __init__(self):
         super(TestModel, self).__init__()
-        self.w1 = tf.constant([[1.5, .3], [-2, .3]])
-        self.w2 = tf.constant([[-2.4, 1.2], [.5, -2.3]])
+        self.conv1 = Conv2D(
+            3, 1, strides=1, activation="relu", padding="valid")
+        self.conv2 = Conv2D(
+            6, 1, strides=1, activation="relu", padding="valid")
+        self.flatten = Flatten()
+        self.dense1 = Dense(5, activation="relu")
+        self.dense2 = Dense(2)
 
     def call(self, x):
-        x = tf.linalg.matmul(x, self.w1)
-        x = tf.math.sigmoid(x)
-        x = tf.linalg.matmul(x, self.w2)
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.flatten(x)
+        x = self.dense1(x)
+        x = self.dense2(x)
         return x
 
 
-TEST_INPUT_SHAPE = (100, 2)
+TEST_INPUT_SHAPE = (100, 2, 2, 1)
 
 
 class TestCommons(CleverHansTest):
     def setUp(self):
         super(TestCommons, self).setUp()
-        # since most attacks are wrapped in tf.function sharing models across tests is
-        # diffcult, thus, we recreate the model in each test
+        # fix random seed for consistent results
+        tf.random.set_seed(42)
+
+        # setup model and input
         self.model = TestModel()
         self.x = tf.random.uniform(TEST_INPUT_SHAPE)
+
+        # run model once so all variables are created
+        self.model(self.x)
+
+        # supported norms
         self.ord_list = [1, 2, np.inf]
 
     def _model_prediction(self, x):
@@ -51,7 +65,7 @@ class TestCommons(CleverHansTest):
     def _attack_success_rate_targeted(self, attack_fn, **attack_kwargs):
         # generate random labels to target
         y_target = tf.random.uniform(
-            minval=0, maxval=2, shape=self.x.shape[:1], dtype=tf.int64)
+            minval=0, maxval=2, shape=self.x.shape[:1], dtype=tf.int64).numpy()
 
         x_adv = attack_fn(
             model_fn=self.model, x=self.x, y=y_target, targeted=True, **self.attack_param)
